@@ -1,0 +1,117 @@
+//
+//  main.cpp
+//  matrices using arrays
+//
+//  Created by Kevin Zhang on 12/11/18.
+//  Copyright © 2018 Kevin Zhang. All rights reserved.
+//
+
+#include <iostream>
+using namespace std;
+
+
+//prints matrix A
+void print_matrix(int * A, int rows, int cols){
+    for (int i = 0; i < rows; ++i){
+        for (int j = 0; j < cols; ++j){
+            cout << A[i*rows + j] << " ";
+        }
+        cout << endl;
+    }
+}
+//matrix addition, prints C=A+B
+void add_matrix(int * A, int * B, int * C, int rows, int cols){
+    for (int i = 0; i < rows; ++i){
+        for (int j = 0; j < cols; ++j){
+            C[i*rows+j] = A[i*rows+j] + B[i*rows+j];
+        }
+    }
+    print_matrix(C, rows, cols);
+}
+//scalar multiply matrix A by integer val, prints B = val*A
+void scalar_mult(int * A, int * B, int rows, int cols, int val){
+    for (int i = 0; i < rows; ++i){
+        for (int j = 0; j < cols; ++j){
+            B[i*rows+j] = val*A[i*rows+j];
+        }
+    }
+    print_matrix(B, rows, cols);
+}
+//naive matrix matrix multiplication A is m x l, B is l x n
+void dumb_multiply(int * A, int * B, int * C, int rows, int cols, int shared_dim){
+    for (int i = 0; i < rows; ++i){
+        for (int j = 0; j < cols; ++j){
+            for (int k = 0; k < shared_dim; ++k){
+                C[i*rows+j] += A[i*rows+k]*B[k*shared_dim+j];
+            }
+        }
+    }
+    print_matrix(C, rows, cols);
+}
+//prints the transpose of A
+void transpose(int * A, int * B, int rows, int cols){
+    for(int i = 0; i < rows; ++i){
+        for(int j = 0; j < cols; ++j){
+            B[i*rows+j] = A[j*rows+i];
+        }
+    }
+    print_matrix(B, rows, cols);
+}
+
+// prints ij element of matrix A
+void get_ij(int * A, int i, int j, int rows){
+    cout << A[i*rows+j] << endl;
+}
+//sets ij element to val
+void set_ij(int * A, int i, int j, int rows, int val){
+    A[i*rows+j] = val;
+}
+//prints the ith row of matrix A
+void extract_row(int * A, int rows, int cols, int i){
+    for (int j = 0; j < cols; ++j){
+        cout << A[i*rows+j] << " ";
+    }
+    cout << endl;
+}
+//prints the jth column of matrix A
+void extract_col(int * A, int rows, int cols, int j){
+    for (int i = 0; i < rows; ++i){
+        cout << A[i*rows+j] << endl;
+    }
+}
+
+int main() {
+    int m = 2; //number of rows of A
+    int l = 2; //number of cols of A and number of rows of B
+    int n = 2; //number of cols of B
+    //create matrices A and B dynamically
+    int * A = new int[m*l];
+    int * B = new int[l*n];
+    //blank matrix C to store results
+    int * C = new int[4];
+    //initialize A and B with random integer entries from 0-10, note that this is row-major storage
+    for (int i = 0; i < m; ++i){
+        for (int j = 0; j < l; ++j){
+            A[i*m+j] = (rand() % static_cast<int>(11));
+        }
+    }
+    for (int i = 0; i < l; ++i){
+        for (int j = 0; j < n; ++j){
+            B[i*l+j] = (rand() % static_cast<int>(11));
+        }
+    }
+    cout << "A = " << endl;
+    print_matrix(A, m, l);
+    cout<<"\n"<<endl;
+    cout << "B = " << endl;
+    print_matrix(B, l, n);
+    cout<<"\n"<<endl;
+    transpose(A,C,m,n);
+    //de-allocate
+    delete [] A;
+    delete [] B;
+    delete [] C;
+    
+    return 0;
+}
+
