@@ -11,14 +11,59 @@
 #include <random>
 #include <iterator>
 #include <array>
+
+
 using namespace std;
 
+
+int sgn(double x){
+    return (x < 0) ? -1 : 1;
+}
+
+//constructs m x n matrix with random integer valued entries from 0 - 10
+//row-major storage
+double * construct_matrix(int m, int n){
+    double * A = new double[m*n];
+    for (int i = 0; i < m; ++i){
+        for (int j = 0; j < n; ++j){
+            A[j+i*n] = rand() % 10;
+        }
+    }
+    return A;
+}
+
+double * construct_uptri(int m){
+    double * A = new double[m*m];
+    for (int i = 0; i < m; ++i){
+        for (int j = 0; j < m; ++j){
+            A[j+i*m] = (i<=j) ? rand() % 10 : 0.0;
+        }
+    }
+    return A;
+}
+
+double * construct_lowtri(int m){
+    double * A = new double[m*m];
+    for (int i = 0; i < m; ++i){
+        for (int j = 0; j < m; ++j){
+            A[j+i*m] = (i>=j) ? rand() % 10 : 0.0;
+        }
+    }
+    return A;
+}
+
+
+double * construct_zeros(int m, int n){
+    double * Z = new double[m*n];
+    fill_n(Z,m*n,0.0);
+    return Z;
+}
 
 //prints matrix A
 void print_matrix(const double * A, int rows, int cols){
     for (int i = 0; i < rows; ++i){
         for (int j = 0; j < cols; ++j){
-            cout << A[i+j*rows] << " ";
+            cout << A[j+i*cols] << " ";
         }
         cout << endl;
     }
@@ -28,7 +73,7 @@ void print_matrix(const double * A, int rows, int cols){
 double * add_matrix(double * A, const double * B, int rows, int cols){
     for (int i = 0; i < rows; ++i){
         for (int j = 0; j < cols; ++j){
-            A[i+j*rows] +=  B[i+j*rows];
+            A[j+i*cols] +=  B[j+i*cols];
         }
     }
     return A;
@@ -39,26 +84,55 @@ double * add_matrix(double * A, const double * B, int rows, int cols){
 double * scalar_mult(double * A, int rows, int cols, double val){
     for (int i = 0; i < rows; ++i){
         for (int j = 0; j < cols; ++j){
-            A[i+j*rows] = val*A[i+j*rows];
+            A[j+i*cols] = val*A[j+i*cols];
         }
     }
     return A;
 }
 
-//naive matrix matrix multiplication A is m x l, B is l x n
-double *  dumb_multiply(const double * A, const double * B, double * C, int rows, int cols, int shared_dim){
-    for (int i = 0; i < rows; ++i){
-        for (int j = 0; j < cols; ++j){
-            for (int k = 0; k < shared_dim; ++k){
-                C[i+j*rows] += A[i+k*rows]*B[k+j*shared_dim];
+//returns the result of naive matrix matrix multiplication; A is m x l, B is l x n, C is m x n
+double *  dumb_multiply(const double * A, const double * B, int m, int l, int n){
+    double * C = new double[m*n];
+    fill_n(C,m*n,0.0);
+    for (int i = 0; i < m; ++i){
+        for (int j = 0; j < n; ++j){
+            double sum = 0.0;
+            for (int k = 0; k < l; ++k){
+                sum += A[k+i*l]*B[j+k*n];
+            }
+            C[j+i*n] = sum;
+        }
+    }
+    return C;
+}
+
+
+//returns the result of blocked matix matrix multiplication; A is m x l, B is l x n, C is m x n
+double * multiply(const double * A, const double * B, int m, int l, int n, int b){
+    double * C = new double[m*n];
+    fill_n(C,m*n,0.0);
+    for (int I = 0; I < m; I += b){
+        for (int J = 0; J < n; J += b){
+            for (int K = 0; K < l; K += b){
+                for (int i = I; i < min(I+b,m); ++i){
+                    for (int j = J; j < min(J+b,n); ++j){
+                        double sum = 0.0;
+                        for (int k = K; k < min(K+b,l); ++k){
+                            sum += A[k+i*l]*B[j+k*n];
+                        }
+                        C[j+i*n] += sum;
+                    }
+                }
             }
         }
     }
     return C;
 }
 
-//computes the transpose of B = A^T
-double * transpose(double * A, double * B, int rows, int cols){
+
+//returns the transpose of B = A^T
+double * transpose(const double * A, int rows, int cols){
+    double * B = new double[rows*cols];
     for(int i = 0; i < rows; ++i){
         for(int j = 0; j < cols; ++j){
             B[j+i*cols] = A[i+j*rows]; //switches from col-major to row-major
@@ -68,42 +142,51 @@ double * transpose(double * A, double * B, int rows, int cols){
 }
 
 //creates an rows x cols identity matrix
-double *  identity(double * A, int rows, int cols){
+double *  identity(int rows, int cols){
+    double * I = new double[rows*cols];
     for(int i = 0; i < rows; ++i){
         for(int j = 0; j < cols; ++j){
-            if (i == j){
-                A[i+j*rows] = 1;
-            }
-            else{
-                A[i+j*rows] = 0;
-            }
+            I[j+i*cols] = (i == j) ? 1 : 0;
         }
     }
-    return A;
+    return I;
+}
+
+//returns the (b-a+1) x (d-c+1) minor matrix of A, [a,b] is row range, [c,d] is col range
+double * minor(double * A, int m, int n, int a, int b, int c, int d){
+    double * B = new double[(b-a+1)*(d-c+1)];
+    for (int i = 0; i < (b-a+1); ++i){
+        for (int j = 0; j < (d-c+1); ++j){
+            B[j+i*(d-c+1)] = A[(j+c)+(i+a)*n];
+        }
+    }
+    return B;
 }
 
 //returns ij element of matrix A
-double get_ij(const double * A, int i, int j, int rows){
-    return A[i+j*rows];
+double get_ij(const double * A, int i, int j, int cols){
+    return A[j+i*cols];
 }
 
 //sets ij element to val
-void set_ij(double * A, int i, int j, int rows, double val){
-    A[i+j*rows] = val;
+void set_ij(double * A, int i, int j, int cols, double val){
+    A[j+i*cols] = val;
 }
 
 //returns the ith row of matrix A
-double * extract_row(const double * A, double * v, int rows, int cols, int i){
+double * extract_row(const double * A, int rows, int cols, int i){
+    double * v = new double[cols];
     for (int j = 0; j < cols; ++j){
-        v[j] = A[i+j*rows];
+        v[j] = A[j+i*cols];
     }
     return v;
 }
 
 //returns the jth column of matrix A
-double * extract_col(double * A, double * v, int rows, int cols, int j){
+double * extract_col(double * A, int rows, int cols, int j){
+    double * v = new double[rows];
     for (int i = 0; i < rows; ++i){
-        v[i] = A[i+j*rows];
+        v[i] = A[j+i*cols];
     }
     return v;
 }
@@ -116,6 +199,7 @@ double dot(double * a, double * b, int dim){
     }
     return result;
 }
+
 //returns 2 norm of vector a
 double norm(double * a, int dim){
     double result = pow(dot(a,a,dim),0.5);
@@ -126,36 +210,37 @@ double norm(double * a, int dim){
 void QR(double * A, double * Q, double * R, int rows, int cols){
     double * v = new double[rows*cols];
     double * q = new double[rows];
-    double * v_i = new double[rows];
-    double * v_j = new double[rows];
     fill_n(Q,rows*cols,0.0);
     fill_n(R,rows*cols,0.0);
     
     memcpy(v, A, rows*cols*sizeof(double)); //copy A into v
     for (int i = 0; i < cols; ++i){
-        extract_col(v, v_i, rows, cols, i); //ith column of v
-        R[i+i*rows] = norm(v_i, rows); //r_ii = ||v_i||
+        double * v_i = extract_col(v, rows, cols, i); //ith column of v
+        R[i+i*cols] = norm(v_i, rows); //r_ii = ||v_i||_2
         memcpy(q, v_i, rows*sizeof(double)); //q_i = v_i
         scalar_mult(q, rows, 1, 1/norm(v_i, rows)); //q_i/r_ii
 
-        //build Q col by col
+        //build Q col by col, building the ith column here
         for (int k = 0; k < rows; ++k){
-            Q[k+i*rows] = q[k];
+            Q[i+k*cols] = q[k];
         }
         
+        delete [] v_i;
         for (int j = i+1; j < cols ; ++j){
             double * q_i = new double[rows];
             memcpy(q_i,q,rows*sizeof(double)); //this is necessary so that the columns of Q are not changed within the loop
-            extract_col(v, v_j, rows, cols, j); //v_j
-            R[i+j*rows] = dot(q_i,v_j,rows); //r_ij = q_i * v_j
-            scalar_mult(q_i, rows, 1, -1*R[i+j*rows]); //-r_ij*q_i
+            double * v_j = extract_col(v, rows, cols, j); //jth column of v
+            R[j+i*cols] = dot(q_i,v_j,rows); //r_ij = q_i * v_j
+            scalar_mult(q_i, rows, 1, -1*R[j+i*cols]); //-r_ij*q_i
             add_matrix(v_j, q_i, rows, 1); // v_j - r_ij*q_i
             for (int k = 0; k < rows; ++k){ //update the next column of v
-                v[k+j*rows] = v_j[k];
+                v[j+k*cols] = v_j[k];
             }
             delete [] q_i;
+            delete [] v_j;
         }
     }
+    
     cout << "Q = " << endl;
     print_matrix(Q, rows, cols);
     cout<<"\n"<<endl;
@@ -163,11 +248,10 @@ void QR(double * A, double * Q, double * R, int rows, int cols){
     print_matrix(R, rows, cols);
     cout << "\n" << endl;
     
-    double * q_0 = new double[rows];
-    double * q_1 = new double[rows];
     
-    extract_col(Q, q_0, rows, cols, 0);
-    extract_col(Q, q_1, rows, cols, 1);
+    
+    double * q_0 = extract_col(Q, rows, cols, 0);
+    double * q_1 = extract_col(Q, rows, cols, 1);
     cout << "are the columns orthogonal?"<<endl;
     cout << dot(q_0,q_1,rows) << endl;
     cout << "\n" << endl;
@@ -176,45 +260,118 @@ void QR(double * A, double * Q, double * R, int rows, int cols){
     cout << dot(q_0,q_0,rows) << endl;
     cout << "\n" << endl;
     
+
     //de-allocate
     delete [] v;
     delete [] q;
-    delete [] v_i;
-    delete [] v_j;
+
     delete [] q_0;
     delete [] q_1;
 }
 
-int main() {
-    int m = 5; //number of rows of A
-    int l = 5; //number of cols of A and number of rows of B
-    int n = 5; //number of cols of B
-    //create matrices A and B dynamically
-    double * A = new double[m*l];
-    double * B = new double[l*n];
-    //blank matrix C to store results
-    double * C = new double[m*n];
-    double * v = new double[3];
-    double * w = new double[m];
-    //initialize A and B with random integer entries from 0-10, note that this is column-major storage
-    for (int i = 0; i < m; ++i){
-        for (int j = 0; j < l; ++j){
-            A[i+j*m] = rand() % 10;
+/*
+//reduces A into its upper triangular form via Householder transforms
+void house(double * A, int rows, int cols){
+    for (int k = 0; k < cols; ++k){
+        double * x = minor(A, rows, cols, k, rows, k, k);
+        double x_1 = get_ij(x, 0, 0, rows-k+1);
+        double * e_1 = identity(rows-k+1, 1);
+        scalar_mult(e_1, rows-k+1, 1, sgn(x_1)*norm(x, rows-k+1));
+        add_matrix(x, e_1, rows-k+1, 1);
+        scalar_mult(x, rows-k+1, 1, 1/norm(x, rows-k+1));
+        
+        
+        delete [] x;
+    }
+    
+}
+*/
+//returns the Cholesky factor L of a SPD matrix A
+double * cholesky(double * A, int n){
+    double * L = new double[n*n];
+    for (int i = 0; i < n; ++i){
+        for (int j = 0; j < i+1; ++j){
+            double s = 0.0;
+            for (int k = 0; k < j; ++k){
+                s += L[k+i*n]*L[k+j*n];
+            }
+            L[j+i*n] = (i == j) ? sqrt(A[i+i*n]-s) : (1.0/L[j+j*n]*(A[j+i*n]-s));
         }
     }
+    return L;
+}
 
-    cout << "A = " << endl;
-    print_matrix(A, m, l);
-    cout << "\n";
-
-    QR(A,B,C,m,l);
+//computes the LU decomposition of n x n matrix A
+void LU(double * A, int n){
+    double * L = construct_zeros(n, n);
+    double * U = construct_zeros(n, n);
     
-    //de-allocate
-    delete [] A;
-    delete [] B;
-    delete [] C;
-    delete [] v;
-    delete [] w;
+    for (int i = 0; i < n; ++i){
+        for (int k = i; k < n; ++k){
+            double sum = 0.0;
+            for (int j = 0; j < n; ++j){
+                sum += L[j+i*n]*U[k+j*n];
+            }
+            U[k+i*n] = A[k+i*n] - sum;
+        }
+        for (int k = i; k < n; ++k){
+            if (i == k){
+                L[i+i*n] = 1.0;
+            }
+            else{
+                double sum = 0.0;
+                for (int j = 0; j < n; ++j){
+                    sum += L[j+k*n]*U[i+j*n];
+                }
+                L[i+k*n] = (A[i+k*n] - sum)/U[i+i*n];
+            }
+        }
+    }
+    /*
+    cout << "lower triangular factor L = " << endl;
+    print_matrix(L, n, n);
+    cout << "\n";
+    cout << "does it work?" << endl;
+    print_matrix(U, n, n);
+    cout << "\n";
+    double * result = multiply(L, U, 3, 3, 3, 1);
+    cout << "test LU = " << endl;
+    print_matrix(result, 3, 3);
+    
+    delete [] L;
+    delete [] U;
+     */
+}
+//solves Ax=b where A is upper triangular and nonsingular
+double * back_substitution(double * A, double * b, int n){
+    double * x = new double[n];
+    fill_n(x,n,0.0);
+    
+    for (int i = n; i >= 0; i--){
+        double s = 0.0;
+        for (int j = i+1; j < n; ++j){
+            s += A[j+i*n]*x[j];
+        }
+        x[i] = (b[i] - s)/A[i+i*n];
+    }
+    return x;
+}
+//solves Ax=b where A is lower triangular and nonsingular
+double * forward_substitution(double * A, double * b, int n){
+    double * x = new double[n];
+    for (int i = 0; i < n; ++i){
+        double s = 0;
+        for (int j = 0; j < i; ++j){
+            s += A[j+i*n]*x[j];
+        }
+        x[i] = (b[i] - s)/A[i+i*n];
+    }
+    return x;
+}
+
+int main() {
+    
+    
     return 0;
 }
 
